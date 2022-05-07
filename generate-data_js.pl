@@ -9,7 +9,7 @@
 
 use strict;
 use warnings;
-use LWP::Simple;
+use HTTP::Tiny;
 use JSON;
 use POSIX qw/strftime/;
 
@@ -48,14 +48,17 @@ sub hero_id {
   return -1;
 }
 
+my $Client = HTTP::Tiny->new();
+
 
 sub get_heroes {
 
   $DEBUG and warn "Getting hero list\n";
 
-  my $content = get ('http://dotabuff.com/heroes') or die;
-  (@heroes_bg) = $content =~ /background: url\((.*?)\)/g;
-  (@heroes) = $content =~ /<div class="name">(.*?)<\/div>/g;
+  my $response = $Client->get('https://www.dotabuff.com/heroes') or die; 
+  my $content = $response->{content};
+  (@heroes_bg) = $response->{content} =~ /background: url\((.*?)\)/g;
+  (@heroes) = $response->{content} =~ /<div class="name">(.*?)<\/div>/g;
   $_ =~ s/'// for (@heroes);  # fix name of nature's prophet
   $_ =~ s/&.*?;// for (@heroes);
   $_ =~ s/&#47;/\//g for (@heroes_bg);
@@ -68,14 +71,15 @@ sub get_winrates_of_hero {
 
   $DEBUG and warn "Getting winrates of $hero\n";
 
-  my $content = get ('http://dotabuff.com/heroes/' .
+  my $response = $Client->get('https://www.dotabuff.com/heroes/' .
                      hero_link ($hero) .
-                     '/matchups') or die;
+                     '/counters') or die; 
+  my $content = $response->{content};
   
   my (@wr) = $content =~ /<dl><dd><span class="(?:won|lost)">(.*?)%<\/span><\/dd><dt>Win Rate<\/dt><\/dl>/g;
   $heroes_wr[$hid] = $wr[0];
 
-  my $re = qr|<td class="cell-xlarge"><a class="link-type-hero" href="/heroes/.*?">(.*?)</a></td><td data-value="(.*?)">.*?%<div class="bar bar-default"><div class="segment segment-advantage" style="width: [\d.]+%;"></div></div></td><td data-value="(.*?)">.*?%<div class="bar bar-default"><div class="segment segment-win" style="width: [\d.]+%;"></div></div></td><td data-value="\d+">([\d,]+)<div class="bar bar-default"><div class="segment segment-match" style="width: [\d.]+%;"></div></div></td></tr>|;
+  my $re = qr|<td class="cell-xlarge"><a class="link-type-hero" href="/heroes/.*?">(.*?)</a></td><td data-value="(.*?)">.*?%<div class="bar bar-default"><div class="segment segment-disadvantage" style="width: [\d.]+%;"></div></div></td><td data-value="(.*?)">.*?%<div class="bar bar-default"><div class="segment segment-win" style="width: [\d.]+%;"></div></div></td><td data-value="\d+">([\d,]+)<div class="bar bar-default"><div class="segment segment-match" style="width: [\d.]+%;"></div></div></td></tr>|;
 
   my (@heros) = $content =~ /$re/g;
 
